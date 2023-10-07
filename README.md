@@ -2,23 +2,26 @@
 
 ## Usage
 Demo example: 
-Given image, point cloud, and calibration file, demo file conducts 3D object detection and saves the results.
+
+Given image, point cloud, and calibration file, the demo file conducts 3D object detection and saves the results.
 ```bash
 python detection_3d_demo.py demo/data/kitti_000008.bin demo/data/kitti_000008.png demo/data/kitti_calibration.yaml configs/bevf_pp_lighter_effnet-es_kitti.py checkpoints/epoch_4.pth --snapshot
 ```
 
 ROS example: 
-Given RGB and LiDAR sensor topics, publish 3d detection result topic.
+
+Given RGB and LiDAR sensor topics, publish 3D detection result topic.
 ```bash
 python detection_3d_ros.py --config configs/bevf_pp_lighter_effnet-es_kitti.py --calib demo/data/kitti/kitti_calibration.yaml --checkpoint checkpoints/epoch_4.pth 
 ```
 
-Note: Some codes are dataset-specific, minor modification is required for the new dataset or hardware.
-Note: Pre-defined 3D detection msg is not compatible with the prediction results of 3D detection network. Minor modification is required.
+Note: Some codes are dataset-specific. Minor modification is required for the new dataset or hardware.
 
-## Installtion
+Note: The pre-defined 3D detection msg is not compatible with the prediction results of 3D detection network. Minor modification is required.
+
+## Installation
 ```bash
-git clone <GIT_ADDRESS>
+git clone https://github.com/UkcheolShin/CMU_3D_Det.git
 pip install -e .
 ```
 
@@ -37,4 +40,5 @@ Device: Nvidia Jetson AGX Orin
 
 Docker image source: https://hub.docker.com/r/dustynv/ros/tags
 - Tag: noetic-pytorch-l4t-r35.1.0
+  
 Current docker image: TBA
