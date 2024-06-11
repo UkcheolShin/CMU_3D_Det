@@ -2,6 +2,8 @@
 from argparse import ArgumentParser
 from mmdet3d.apis import (inference_multi_modality_detector, init_model,
                           show_result_meshlab)
+import warnings
+warnings.filterwarnings("ignore")
 
 def main():
     parser = ArgumentParser()
@@ -15,7 +17,7 @@ def main():
     parser.add_argument(
         '--score-thr', type=float, default=0.5, help='bbox score threshold')
     parser.add_argument(
-        '--out-dir', type=str, default='demo', help='dir to save results')
+        '--out-dir', type=str, default='demo/results', help='dir to save results')
     parser.add_argument(
         '--snapshot',
         action='store_true',

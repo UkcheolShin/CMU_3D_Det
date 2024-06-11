@@ -5,7 +5,11 @@ Demo example:
 
 Given image, point cloud, and calibration file, the demo file conducts 3D object detection and saves the results.
 ```bash
-python detection_3d_demo.py demo/data/kitti_000008.bin demo/data/kitti_000008.png demo/data/kitti_calibration.yaml configs/bevf_pp_lighter_effnet-es_kitti.py checkpoints/epoch_4.pth --snapshot
+python detection_3d_demo.py demo/data_det/kitti_000008.bin demo/data_det/kitti_000008.png demo/data_det/kitti_calibration.yaml configs/bevf_pp_lighter_effnet-es_kitti.py checkpoints/epoch_4.pth --snapshot
+```
+
+```bash
+python tracker_3d_demo.py demo/data_trk/lidar demo/data_trk/img demo/data_trk/kitti_calibration.yaml configs/bevf_pp_lighter_effnet-es_kitti.py checkpoints/epoch_4.pth --snapshot
 ```
 
 ROS example: 

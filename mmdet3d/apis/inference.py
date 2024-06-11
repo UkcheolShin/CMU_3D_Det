@@ -546,7 +546,7 @@ def show_result_meshlab(data,
         f'unsupported visualization task {task}'
     assert out_dir is not None, 'Expect out_dir, got none.'
 
-    if task in ['det', 'multi_modality-det']:
+    if task in ['det']:
         file_name = show_det_result_meshlab(data, result, out_dir, score_thr,
                                             show, snapshot)
 
