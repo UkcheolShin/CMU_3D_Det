@@ -9,7 +9,7 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('pcd', help='Point cloud file')
     parser.add_argument('image', help='image file')
-    parser.add_argument('ann', help='ann file')
+    parser.add_argument('calib', help='calibration file')
     parser.add_argument('config', help='Config file')
     parser.add_argument('checkpoint', help='Checkpoint file')
     parser.add_argument(
@@ -37,7 +37,24 @@ def main():
 
     # test a single image
     result, data = inference_multi_modality_detector(model, args.pcd,
-                                                     args.image, args.ann)
+                                                     args.image, args.calib)
+    """
+    inference_multi_modality_detector
+    Args:
+        model (nn.Module): The loaded detector.
+        pcd (str or pc): Point cloud files.
+        image (str or numpy): Image files.
+        calib_file (str): Calibration files.
+
+    Returns:
+        tuple: Predicted results and data from pipeline
+        containing following results: ['boxes_3d', 'scores_3d', 'labels_3d']
+        # 'boxes_3d'  : Each row is (x, y, z, x_size, y_size, z_size, yaw) in Lidar coodinates 
+        #             : Nx7, where N stands for detected objects
+        #             : (see details: mmdet3d/core/bbox/lidar_box3d.py)
+        # 'scores_3d' : confidence score (Nx1), 0 is low, 1 is high confidence 
+        # 'label_id'  : label of detected objects (Nx1), 0: pedestrian, 1: cylist, 2:car 
+    """
     print('Inference done...')
 
     # show the results

@@ -1,5 +1,5 @@
 # Written by Ukcheol Shin (ushin@andrew.cmu.edu)
-import time, os
+import os
 import numpy as np
 from argparse import ArgumentParser
 from mmdet3d.apis import (inference_multi_modality_detector, init_model,
@@ -11,6 +11,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def convert_dets_to_box_data(det_result, threshold=0.4):
+    """
+    Converting dataformat for tracking module.
+    """
     dets_all = {'dets': [], 'confs': [], 'labels': []}
 
     det_result = det_result[0]['pts_bbox']
@@ -26,7 +29,7 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('pcd', help='Point cloud file')
     parser.add_argument('image', help='image file')
-    parser.add_argument('ann', help='ann file')
+    parser.add_argument('calib', help='calibration file')
     parser.add_argument('config', help='Config file')
     parser.add_argument('checkpoint', help='Checkpoint file')
     parser.add_argument(
@@ -35,10 +38,6 @@ def main():
         '--score-thr', type=float, default=0.4, help='bbox score threshold')
     parser.add_argument(
         '--out-dir', type=str, default='demo/results', help='dir to save results')
-    parser.add_argument(
-        '--snapshot',
-        action='store_true',
-        help='whether to save online visualization results')
     args = parser.parse_args()
 
     # build the model from a config file and a checkpoint file
@@ -52,7 +51,7 @@ def main():
         file_name  = os.path.split(filename)[-1].split('.')[0]
         path_img   = os.path.join(args.image, file_name+".png")
         path_lidar = os.path.join(args.pcd, file_name+".bin")
-        path_calib = args.ann
+        path_calib = args.calib
 
         # raw sensor forwarding test
         # import mmcv
@@ -60,15 +59,28 @@ def main():
         # path_img = mmcv.imread(path_img, 'unchanged')
         # path_lidar = np.fromfile(path_lidar, dtype=np.float32)
 
-        # test a single image
+        # inference 3d object detection
         det_result, data = inference_multi_modality_detector(model, path_lidar,
                                                          path_img, path_calib)
-        det_result_np = convert_dets_to_box_data(det_result, threshold=args.score_thr) # assume single batch size
+        # convert data format for tracker module
+        det_result_np = convert_dets_to_box_data(det_result, threshold=args.score_thr)
 
-        # important
-        start_time = time.time()
+        # inference 3d object tracking
         trk_result = mot_tracker.update(det_result_np)
-        cycle_time = time.time() - start_time
+        """
+        mot_tracker.update()
+        Args:
+            dictionary: 3D detection results
+
+        Returns:
+            dictionary: Predicted results and data from pipeline (Nx10, N: tracked objects)
+            : containing following results: [x, y, z, x_size, y_size, z_size, yaw, id, score, label]
+            : (x, y, z, x_size, y_size, z_size, yaw) in Lidar coodinates 
+            : (see details: mmdet3d/core/bbox/lidar_box3d.py)
+            'id'     : ID for tracked objects
+            'scores' : confidence score (Nx1), 0 is low, 1 is high confidence 
+            'label'  : label of detected objects (Nx1), 0: pedestrian, 1: cylist, 2:car 
+        """
 
         bboxes_3d  = LiDARInstance3DBoxes(trk_result[:,:7], origin=(0.5, 0.5, 0))
         bboxes_vertex = bboxes_3d.corners
