@@ -63,6 +63,7 @@ def main():
         result,
         args.out_dir,
         args.score_thr,
+        # img=args.image, # uncomment when test raw sensor data
         snapshot=args.snapshot,
         task='multi_modality-det')
 

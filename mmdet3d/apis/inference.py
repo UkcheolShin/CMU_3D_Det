@@ -438,17 +438,21 @@ def show_proj_det_result_meshlab(data,
                                  result,
                                  out_dir,
                                  score_thr=0.0,
+                                 img=None,
                                  show=False,
                                  snapshot=False):
     """Show result of projecting 3D bbox to 2D image by meshlab."""
     assert 'img' in data.keys(), 'image data is not provided for visualization'
 
-    img_filename = data['img_metas'][0][0]['filename']
-
-    file_name = osp.split(img_filename)[-1].split('.')[0]
+    if img is None:
+        img_filename = data['img_metas'][0][0]['filename']
+        file_name = osp.split(img_filename)[-1].split('.')[0]
+        img = mmcv.imread(img_filename)
+    else:
+        img_filename = 'tmp.png'
+        file_name = osp.split(img_filename)[-1].split('.')[0]
 
     # read from file because img in data_dict has undergone pipeline transform
-    img = mmcv.imread(img_filename)
 
     if 'pts_bbox' in result[0].keys():
         result[0] = result[0]['pts_bbox']
@@ -520,6 +524,7 @@ def show_result_meshlab(data,
                         result,
                         out_dir,
                         score_thr=0.0,
+                        img=None,
                         show=False,
                         snapshot=False,
                         task='det',
@@ -556,6 +561,6 @@ def show_result_meshlab(data,
 
     if task in ['multi_modality-det', 'mono-det']:
         file_name = show_proj_det_result_meshlab(data, result, out_dir,
-                                                 score_thr, show, snapshot)
+                                                 score_thr, img, show, snapshot)
 
     return out_dir, file_name
