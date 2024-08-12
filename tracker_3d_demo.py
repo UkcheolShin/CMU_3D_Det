@@ -41,7 +41,7 @@ def main():
     args = parser.parse_args()
 
     # build the model from a config file and a checkpoint file
-    model = init_model(args.config, args.checkpoint, device=args.device) # detector
+    model, pred2bbox = init_model(args.config, args.checkpoint, device=args.device) # detector
     mot_tracker = AB3DMOT() # tracker
     print('Model initialization done...')
 
@@ -60,7 +60,7 @@ def main():
         # path_lidar = np.fromfile(path_lidar, dtype=np.float32)
 
         # inference 3d object detection
-        det_result, data = inference_multi_modality_detector(model, path_lidar,
+        det_result, data = inference_multi_modality_detector(model, pred2bbox, path_lidar,
                                                          path_img, path_calib)
         # convert data format for tracker module
         det_result_np = convert_dets_to_box_data(det_result, threshold=args.score_thr)

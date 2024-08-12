@@ -32,7 +32,13 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(type='Collect3D', keys=['points', 'img'])
+            dict(type='Collect3D', keys=['points', 'img']),
+            dict(type='Point2Voxel',
+                 max_num_points=28,
+                 point_cloud_range=point_cloud_range,
+                 voxel_size=[0.16, 0.16, 4],
+                 max_voxel=40000,
+                 )
         ])
 ]
 

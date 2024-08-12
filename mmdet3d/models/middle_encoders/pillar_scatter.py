@@ -25,17 +25,17 @@ class PointPillarsScatter(nn.Module):
         self.in_channels = in_channels
         self.fp16_enabled = False
 
-    @auto_fp16(apply_to=('voxel_features', ))
-    def forward(self, voxel_features, coors, batch_size=None):
-        """Foraward function to scatter features."""
-        # TODO: rewrite the function in a batch manner
-        # no need to deal with different batch cases
-        if batch_size is not None:
-            return self.forward_batch(voxel_features, coors, batch_size)
-        else:
-            return self.forward_single(voxel_features, coors)
+    # @auto_fp16(apply_to=('voxel_features', ))
+    # def forward(self, voxel_features, coors, batch_size=None):
+    #     """Foraward function to scatter features."""
+    #     # TODO: rewrite the function in a batch manner
+    #     # no need to deal with different batch cases
+    #     if batch_size is not None:
+    #         return self.forward_batch(voxel_features, coors, batch_size)
+    #     else:
+    #         return self.forward_single(voxel_features, coors)
 
-    def forward_single(self, voxel_features, coors):
+    def forward(self, voxel_features, coors):
         """Scatter features of single sample.
 
         Args:

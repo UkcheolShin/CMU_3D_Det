@@ -211,48 +211,48 @@ class PointFusion(BaseModule):
                 dict(type='Xavier', layer='Linear', distribution='uniform')
             ]
 
-    def forward(self, pts, pts_feats, img_feats=None, img_metas=None):
-        """Forward function.
+    # def forward(self, pts, pts_feats, img_feats=None, img_metas=None):
+    #     """Forward function.
 
-        Args:
-            img_feats (list[torch.Tensor]): Image features.
-            pts: [list[torch.Tensor]]: A batch of points with shape N x 3.
-            pts_feats (torch.Tensor): A tensor consist of point features of the
-                total batch.
-            img_metas (list[dict]): Meta information of images.
+    #     Args:
+    #         img_feats (list[torch.Tensor]): Image features.
+    #         pts: [list[torch.Tensor]]: A batch of points with shape N x 3.
+    #         pts_feats (torch.Tensor): A tensor consist of point features of the
+    #             total batch.
+    #         img_metas (list[dict]): Meta information of images.
 
-        Returns:
-            torch.Tensor: Fused features of each point.
-        """
-        if img_feats is None:
-            pts_pre_fuse = self.pts_transform(pts_feats)
-            fuse_out = pts_pre_fuse
-        else:
-            img_pts = self.obtain_mlvl_feats(img_feats, pts, img_metas)
-            img_pre_fuse = self.img_transform(img_pts)
-            if self.training and self.dropout_ratio > 0:
-                img_pre_fuse = F.dropout(img_pre_fuse, self.dropout_ratio)
-            pts_pre_fuse = self.pts_transform(pts_feats)
+    #     Returns:
+    #         torch.Tensor: Fused features of each point.
+    #     """
+    #     if img_feats is None:
+    #         pts_pre_fuse = self.pts_transform(pts_feats)
+    #         fuse_out = pts_pre_fuse
+    #     else:
+    #         img_pts = self.obtain_mlvl_feats(img_feats, pts, img_metas)
+    #         img_pre_fuse = self.img_transform(img_pts)
+    #         if self.training and self.dropout_ratio > 0:
+    #             img_pre_fuse = F.dropout(img_pre_fuse, self.dropout_ratio)
+    #         pts_pre_fuse = self.pts_transform(pts_feats)
 
-            if self.training and self.randomized_fusion:
-                p = torch.rand(1)
-                if p < 0.25:
-                    fuse_out = (img_pre_fuse + pts_pre_fuse) / 2.0
-                elif p < 0.5:
-                    fuse_out = img_pre_fuse
-                elif p < 0.75:
-                    fuse_out = pts_pre_fuse
-                else:
-                    fuse_out = (img_pre_fuse + pts_pre_fuse) / 2.0
-                    fuse_out = F.dropout(fuse_out, 0.5)
-            else:
-                fuse_out = (img_pre_fuse + pts_pre_fuse) / 2.0
-            if self.activate_out:
-                fuse_out = F.relu(fuse_out)
-            if self.fuse_out:
-                fuse_out = self.fuse_conv(fuse_out)
+    #         if self.training and self.randomized_fusion:
+    #             p = torch.rand(1)
+    #             if p < 0.25:
+    #                 fuse_out = (img_pre_fuse + pts_pre_fuse) / 2.0
+    #             elif p < 0.5:
+    #                 fuse_out = img_pre_fuse
+    #             elif p < 0.75:
+    #                 fuse_out = pts_pre_fuse
+    #             else:
+    #                 fuse_out = (img_pre_fuse + pts_pre_fuse) / 2.0
+    #                 fuse_out = F.dropout(fuse_out, 0.5)
+    #         else:
+    #             fuse_out = (img_pre_fuse + pts_pre_fuse) / 2.0
+    #         if self.activate_out:
+    #             fuse_out = F.relu(fuse_out)
+    #         if self.fuse_out:
+    #             fuse_out = self.fuse_conv(fuse_out)
 
-        return fuse_out
+    #     return fuse_out
 
     def obtain_mlvl_feats(self, img_feats, pts, img_metas):
         """Obtain multi-level features for each point.
@@ -286,6 +286,70 @@ class PointFusion(BaseModule):
 
         img_pts = torch.cat(img_feats_per_point, dim=0)
         return img_pts
+
+    def forward(self, pts, pts_feats, img_feats, proj_mat):
+        """Forward function.
+        For torch.jit.trace
+        Args:
+            img_feats (list[torch.Tensor]): Image features.
+            pts: [list[torch.Tensor]]: A batch of points with shape N x 3.
+            pts_feats (torch.Tensor): A tensor consist of point features of the
+                total batch.
+            img_metas (list[dict]): Meta information of images.
+
+        Returns:
+            torch.Tensor: Fused features of each point.
+        """
+        if img_feats is None:
+            pts_pre_fuse = self.pts_transform(pts_feats)
+            fuse_out = pts_pre_fuse
+        else:
+            img_pts = self.obtain_mlvl_feats_jit(img_feats, pts, proj_mat)
+            img_pre_fuse = self.img_transform(img_pts)
+            pts_pre_fuse = self.pts_transform(pts_feats)
+            fuse_out = (img_pre_fuse + pts_pre_fuse) / 2.0
+            fuse_out = F.relu(fuse_out)
+
+        return fuse_out
+
+    def obtain_mlvl_feats_jit(self, img_feats, pts, proj_mat):
+        """For torch.jit.trace"""
+
+        # project points to camera coordinate
+        pts[:, -1] = 1.0
+        point_2d = pts @ proj_mat.T
+        pts_2d = point_2d[..., :2] / point_2d[..., 2:3]
+
+        # pts_2d = points_cam2img(pts, proj_mat)
+        img_coors = pts_2d[:, 0:2]
+        coor_x, coor_y = torch.split(img_coors, 1, dim=1)  # each is Nx1
+
+        mlvl_img_feats = []
+        img_w = 1280
+        img_h = 384
+
+        for level in range(len(img_feats)):
+            # scale_factor = img_h // img_feats[level].shape[2]
+            # scale_factor = torch.div(img_h, img_feats[level].shape[2], rounding_mode='floor')
+            # coor_y_lv = coor_y / scale_factor / img_h * 2 - 1
+            # coor_x_lv = coor_x / scale_factor / img_w * 2 - 1
+            coor_y_lv = coor_y / img_h * 2 - 1
+            coor_x_lv = coor_x / img_w * 2 - 1
+            grid = torch.cat([coor_x_lv, coor_y_lv],
+                            dim=1).unsqueeze(0).unsqueeze(0)  # Nx2 -> 1x1xNx2
+
+            point_features = F.grid_sample(
+                img_feats[level],
+                grid,
+                mode='bilinear',
+                padding_mode='zeros',
+                align_corners=True)  # 1xCx1xN feats
+
+            mlvl_img_feats.append(
+                point_features.squeeze().t()
+            )
+        mlvl_img_feats = torch.cat(mlvl_img_feats, dim=-1)
+        return mlvl_img_feats
 
     def sample_single(self, img_feats, pts, img_meta):
         """Sample features from single level image feature map.

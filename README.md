@@ -6,11 +6,13 @@ Demo example:
 Given image, point cloud, and calibration file, the demo file conducts 3D object detection/tracking and saves the results.
 ```bash
 # 1. 3D object detection demo, results are saved at demo/results folder.
+# if you want use faster model, use epoch_4.jit.pth
 python detection_3d_demo.py demo/data_det/kitti_000008.bin demo/data_det/kitti_000008.png demo/data_det/kitti_calibration.yaml configs/bevf_pp_lighter_effnet-es_kitti.py checkpoints/epoch_4.pth --snapshot
 ```
 
 ```bash
 # 2. 3D object tracking demo
+# if you want use faster model, use epoch_4.jit.pth
 python tracker_3d_demo.py demo/data_trk/lidar demo/data_trk/img demo/data_trk/kitti_calibration.yaml configs/bevf_pp_lighter_effnet-es_kitti.py checkpoints/epoch_4.pth
 ```
 
@@ -36,12 +38,13 @@ cd ${WORK_DIR}
 git clone https://github.com/dusty-nv/jetson-inference.git
 docker pull dustynv/ros:noetic-pytorch-l4t-r35.1.0
 
-# 2. tracking code installation
+# 2. detection and tracking code installation
 git clone https://github.com/UkcheolShin/CMU_3D_Det.git
 cd jetson-inference/
 docker/run.sh -c dustynv/ros:noetic-pytorch-l4t-r35.1.0 --ros=noetic --volume ${WORK_DIR}:/results
 cd ${WORK_DIR}/CMU_3D_Det
 pip install -e .
+pip install filterpy
 ```
 
 ## Dependencies

@@ -12,6 +12,9 @@ from mmcv.cnn import (build_conv_layer, build_norm_layer, build_upsample_layer,
 from torchvision.utils import save_image
 from mmcv.cnn import ConvModule, xavier_init
 import torch.nn as nn
+
+from mmdet3d.core import bbox3d2result
+
 class SE_Block(nn.Module):
     def __init__(self, c):
         super().__init__()
@@ -144,7 +147,18 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
         )
         # return (img_feats, pts_feats, depth_dist)
 
-    def simple_test(self, points, img_metas, img=None, rescale=False):
+    def forward(self, voxels, num_points, coors, img, proj_mat):
+        """For torch.jit.trace"""
+        img_feats = self.img_backbone(img)
+        voxel_features = self.pts_voxel_encoder(
+                    voxels, num_points, coors, img_feats, proj_mat)
+        x = self.pts_middle_encoder(voxel_features, coors)
+        x = self.pts_backbone(x)
+        feats = self.pts_neck(x)
+        outs = self.pts_bbox_head(feats)
+        return outs
+
+    def simple_test(self, points, img_metas=None, img=None, rescale=False):
         """Test function without augmentaiton."""
         feature_dict = self.extract_feat(
             points, img=img, img_metas=img_metas)

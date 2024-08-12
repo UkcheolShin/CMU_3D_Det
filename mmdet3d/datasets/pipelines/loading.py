@@ -2,13 +2,62 @@
 import mmcv
 import numpy as np
 import torch
+from torch.nn import functional as F
 
+from mmcv.ops import voxelization
 from mmdet3d.core.points import BasePoints, get_points_type
 from mmdet3d.core.utils.gaussian import generate_guassian_depth_target
 from mmdet3d.core.visualizer.image_vis import map_pointcloud_to_image
 from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
 from ..builder import PIPELINES
 
+
+@PIPELINES.register_module()
+class Point2Voxel(object):
+    def __init__(self,
+                 voxel_size,
+                 point_cloud_range,
+                 max_num_points,
+                 max_voxel = 20000,
+                 deterministic = True):
+
+        self.voxel_size = voxel_size
+        self.point_cloud_range = point_cloud_range
+        self.max_num_points = max_num_points
+        self.max_voxel = max_voxel
+        self.deterministic = deterministic
+
+        point_cloud_range = torch.tensor(
+            point_cloud_range, dtype=torch.float32)
+        voxel_size = torch.tensor(voxel_size, dtype=torch.float32)
+        grid_size = (
+            point_cloud_range[3:] -  # type: ignore
+            point_cloud_range[:3]) / voxel_size  # type: ignore
+        grid_size = torch.round(grid_size).long()
+        input_feat_shape = grid_size[:2]
+        self.grid_size = grid_size
+        # the origin shape is as [x-len, y-len, z-len]
+        # [w, h, d] -> [d, h, w]
+        self.pcd_shape = [*input_feat_shape, 1][::-1]
+
+
+    def __call__(self, results):
+        voxels, coor, num_points = voxelization(
+            results['points'].data,
+            self.voxel_size,
+            self.point_cloud_range,
+            self.max_num_points,
+            self.max_voxel,
+            self.deterministic)
+
+        coors_batch = F.pad(coor, (1, 0), mode='constant', value=0)
+        results.update({
+            'voxels': voxels,
+            'num_points': num_points,
+            'coors': coors_batch,
+        })
+        results.pop('points')
+        return results
 
 @PIPELINES.register_module()
 class MyResize(object):

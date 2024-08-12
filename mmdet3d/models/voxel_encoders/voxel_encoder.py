@@ -384,28 +384,84 @@ class HardVFE(nn.Module):
         if fusion_layer is not None:
             self.fusion_layer = builder.build_fusion_layer(fusion_layer)
 
+    # @force_fp32(out_fp16=True)
+    # def forward(self,
+    #             features,
+    #             num_points,
+    #             coors,
+    #             img_feats=None,
+    #             img_metas=None):
+    #     """Forward functions.
+
+    #     Args:
+    #         features (torch.Tensor): Features of voxels, shape is MxNxC.
+    #         num_points (torch.Tensor): Number of points in each voxel.
+    #         coors (torch.Tensor): Coordinates of voxels, shape is Mx(1+NDim).
+    #         img_feats (list[torch.Tensor], optional): Image features used for
+    #             multi-modality fusion. Defaults to None.
+    #         img_metas (dict, optional): [description]. Defaults to None.
+
+    #     Returns:
+    #         tuple: If `return_point_feats` is False, returns voxel features and
+    #             its coordinates. If `return_point_feats` is True, returns
+    #             feature of each points inside voxels.
+    #     """
+    #     features_ls = [features]
+    #     # Find distance of x, y, and z from cluster center
+    #     if self._with_cluster_center:
+    #         points_mean = (
+    #             features[:, :, :3].sum(dim=1, keepdim=True) /
+    #             num_points.type_as(features).view(-1, 1, 1))
+    #         # TODO: maybe also do cluster for reflectivity
+    #         f_cluster = features[:, :, :3] - points_mean
+    #         features_ls.append(f_cluster)
+
+    #     # Find distance of x, y, and z from pillar center
+    #     if self._with_voxel_center:
+    #         f_center = features.new_zeros(
+    #             size=(features.size(0), features.size(1), 3))
+    #         f_center[:, :, 0] = features[:, :, 0] - (
+    #             coors[:, 3].type_as(features).unsqueeze(1) * self.vx +
+    #             self.x_offset)
+    #         f_center[:, :, 1] = features[:, :, 1] - (
+    #             coors[:, 2].type_as(features).unsqueeze(1) * self.vy +
+    #             self.y_offset)
+    #         f_center[:, :, 2] = features[:, :, 2] - (
+    #             coors[:, 1].type_as(features).unsqueeze(1) * self.vz +
+    #             self.z_offset)
+    #         features_ls.append(f_center)
+
+    #     if self._with_distance:
+    #         points_dist = torch.norm(features[:, :, :3], 2, 2, keepdim=True)
+    #         features_ls.append(points_dist)
+
+    #     # Combine together feature decorations
+    #     voxel_feats = torch.cat(features_ls, dim=-1)
+    #     # The feature decorations were calculated without regard to whether
+    #     # pillar was empty.
+    #     # Need to ensure that empty voxels remain set to zeros.
+    #     voxel_count = voxel_feats.shape[1]
+    #     mask = get_paddings_indicator(num_points, voxel_count, axis=0)
+    #     voxel_feats *= mask.unsqueeze(-1).type_as(voxel_feats)
+
+    #     for i, vfe in enumerate(self.vfe_layers):
+    #         voxel_feats = vfe(voxel_feats)
+
+    #     # if (self.fusion_layer is not None and img_feats is not None):
+    #     if self.fusion_layer is not None:
+    #         voxel_feats = self.fusion_with_mask(features, mask, voxel_feats,
+    #                                             coors, img_feats, img_metas)
+
+    #     return voxel_feats
+
     @force_fp32(out_fp16=True)
     def forward(self,
                 features,
                 num_points,
                 coors,
-                img_feats=None,
-                img_metas=None):
-        """Forward functions.
+                img_feats,
+                proj_mat):
 
-        Args:
-            features (torch.Tensor): Features of voxels, shape is MxNxC.
-            num_points (torch.Tensor): Number of points in each voxel.
-            coors (torch.Tensor): Coordinates of voxels, shape is Mx(1+NDim).
-            img_feats (list[torch.Tensor], optional): Image features used for
-                multi-modality fusion. Defaults to None.
-            img_metas (dict, optional): [description]. Defaults to None.
-
-        Returns:
-            tuple: If `return_point_feats` is False, returns voxel features and
-                its coordinates. If `return_point_feats` is True, returns
-                feature of each points inside voxels.
-        """
         features_ls = [features]
         # Find distance of x, y, and z from cluster center
         if self._with_cluster_center:
@@ -449,10 +505,27 @@ class HardVFE(nn.Module):
 
         # if (self.fusion_layer is not None and img_feats is not None):
         if self.fusion_layer is not None:
-            voxel_feats = self.fusion_with_mask(features, mask, voxel_feats,
-                                                coors, img_feats, img_metas)
+            voxel_feats = self.fusion_with_mask_jit(features, mask, voxel_feats,
+                                                coors, img_feats, proj_mat)
 
         return voxel_feats
+
+    def fusion_with_mask_jit(self, features, mask, voxel_feats, coors, img_feats, proj_mat):
+        # the features is consist of a batch of points
+        batch_size = coors[-1, 0] + 1
+        points = features[mask]
+
+        point_feats = voxel_feats[mask]
+        point_feats = self.fusion_layer(points, point_feats, img_feats, proj_mat)
+
+        voxel_canvas = voxel_feats.new_zeros(
+            size=(voxel_feats.size(0), voxel_feats.size(1),
+                  point_feats.size(-1)))
+        voxel_canvas[mask] = point_feats
+        out = torch.max(voxel_canvas, dim=1)[0]
+
+        return out
+
 
     def fusion_with_mask(self, features, mask, voxel_feats, coors, img_feats,
                          img_metas):

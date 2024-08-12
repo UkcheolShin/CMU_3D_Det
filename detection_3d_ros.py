@@ -21,8 +21,8 @@ class ros_detection3d_node():
 
         # 1. Initialize inference model
         # build the model from a config file and a checkpoint file
-        self.model = init_model(self.args.config, self.args.checkpoint, 
-                                device=self.args.device)
+        self.model, self.pred2bbox = init_model(self.args.config, self.args.checkpoint, 
+                                                device=self.args.device)
         rospy.loginfo('Det3D: Pretrained 3D object detector loaded...')
 
         # 2. Initialize subscriber/publisher ROS nodes
@@ -72,7 +72,7 @@ class ros_detection3d_node():
             lidar_pc = np.array(lidar_pc)
 
             # test a single image
-            pred_result = inference_multi_modality_detector(self.model, lidar_pc, image, self.calib)[0]
+            pred_result = inference_multi_modality_detector(self.model, self.pred2bbox, lidar_pc, image, self.calib)[0]
             pred_result = pred_result[0]['pts_bbox'] # assume single batch size
             
             # pred_result contain following results : ['boxes_3d', 'scores_3d', 'labels_3d']

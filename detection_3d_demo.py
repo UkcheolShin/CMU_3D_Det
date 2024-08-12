@@ -31,12 +31,12 @@ def main():
     # args.pcd = np.fromfile(args.pcd, dtype=np.float32)
 
     # build the model from a config file and a checkpoint file
-    model = init_model(args.config, args.checkpoint, device=args.device)
+    model, pred2bbox = init_model(args.config, args.checkpoint, device=args.device)
 
     print('Model initialization done...')
 
     # test a single image
-    result, data = inference_multi_modality_detector(model, args.pcd,
+    result, data = inference_multi_modality_detector(model, pred2bbox, args.pcd,
                                                      args.image, args.calib)
     """
     inference_multi_modality_detector

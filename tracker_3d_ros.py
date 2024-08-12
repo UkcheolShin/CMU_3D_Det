@@ -26,7 +26,7 @@ class ros_detection3d_node():
 
         # 1. Initialize inference model
         # build the model from a config file and a checkpoint file
-        self.det_model = init_model(self.args.config, self.args.checkpoint, 
+        self.det_model, self.pred2bbox = init_model(self.args.config, self.args.checkpoint, 
                                 device=self.args.device)
         rospy.loginfo('Trk3D: Pretrained 3D object detector loaded...')
 
@@ -80,7 +80,7 @@ class ros_detection3d_node():
             lidar_pc = np.array(lidar_pc)
 
             # inference 3d object detection
-            det_result, meta_data = inference_multi_modality_detector(self.det_model, lidar_pc, image, self.calib)
+            det_result, meta_data = inference_multi_modality_detector(self.det_model, self.pred2bbox, lidar_pc, image, self.calib)
             det_result_np = self.convert_dets_to_box_data(det_result, threshold=self.score_thr)
 
             # inference 3d object tracking

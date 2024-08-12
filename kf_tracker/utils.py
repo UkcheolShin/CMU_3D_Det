@@ -36,7 +36,7 @@ def plot_rect3d_on_img(img,
     """
     line_indices = ((0, 1), (0, 3), (0, 4), (1, 2), (1, 5), (3, 2), (3, 7),
                     (4, 5), (4, 7), (2, 6), (5, 6), (6, 7))
-    corners = rect_corners.astype(np.int)
+    corners = rect_corners.astype(int)
     for start, end in line_indices:
         cv2.line(img, (corners[start, 0], corners[start, 1]),
                  (corners[end, 0], corners[end, 1]), color, thickness,

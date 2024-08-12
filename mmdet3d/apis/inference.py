@@ -11,7 +11,7 @@ from mmcv.runner import load_checkpoint
 
 from mmdet3d.core import (Box3DMode, CameraInstance3DBoxes, Coord3DMode,
                           DepthInstance3DBoxes, LiDARInstance3DBoxes,
-                          show_multi_modality_result, show_result,
+                          show_multi_modality_result, show_result, bbox3d2result,
                           show_seg_result)
 from mmdet3d.core.bbox import get_box_type
 from mmdet3d.datasets.pipelines import Compose
@@ -58,14 +58,15 @@ def init_model(config, checkpoint=None, device='cuda:0'):
     convert_SyncBN(config.model)
     config.model.train_cfg = None
     model = build_model(config.model, test_cfg=config.get('test_cfg'))
+    pred2bbox = model.pts_bbox_head
+
     if checkpoint is not None:
-        checkpoint = load_checkpoint(model, checkpoint, map_location='cpu')
-        if 'CLASSES' in checkpoint['meta']:
-            model.CLASSES = checkpoint['meta']['CLASSES']
+        if 'jit' in checkpoint:
+            model = torch.jit.load(checkpoint)
         else:
-            model.CLASSES = config.class_names
-        if 'PALETTE' in checkpoint['meta']:  # 3D Segmentor
-            model.PALETTE = checkpoint['meta']['PALETTE']
+            checkpoint = load_checkpoint(model, checkpoint, map_location='cpu')
+
+    model.CLASSES = config.class_names
     model.cfg = config  # save the config in the model for convenience
     if device != 'cpu':
         torch.cuda.set_device(device)
@@ -75,7 +76,10 @@ def init_model(config, checkpoint=None, device='cuda:0'):
                        'Some functions are not supported for now.')
     model.to(device)
     model.eval()
-    return model
+
+    pred2bbox.to(device)
+    pred2bbox.eval()
+    return model, pred2bbox
 
 
 def inference_detector(model, pcd):
@@ -173,11 +177,12 @@ def ReadCalibFile(CalibrationFile):
     calibdata['P2'] = np.reshape(calibdata['P2'], (4, 4)).astype(np.float32)
     return calibdata
 
-def inference_multi_modality_detector(model, pcd, image, ann_file):
+def inference_multi_modality_detector(model, pred2bbox, pcd, image, ann_file):
     """Inference point cloud with the multi-modality detector.
 
     Args:
         model (nn.Module): The loaded detector.
+        pred2bbox (nn.Module): Converter prediction to 3D bbox
         pcd (str or pc): Point cloud files.
         image (str or numpy): Image files.
         ann_file (str): Annotation files.
@@ -246,19 +251,40 @@ def inference_multi_modality_detector(model, pcd, image, ann_file):
         data['img_metas'][0].data['depth2img'] = depth2img
 
     data = collate([data], samples_per_gpu=1)
+
     if next(model.parameters()).is_cuda:
         # scatter to specified GPU
         data = scatter(data, [device.index])[0]
     else:
         # this is a workaround to avoid the bug of MMDataParallel
         data['img_metas'] = data['img_metas'][0].data
-        data['points'] = data['points'][0].data
+        # data['points'] = data['points'][0].data
+        data['voxels'] = data['voxels'][0].data
+        data['num_points'] = data['num_points'][0].data
+        data['coors'] = data['coors'][0].data
         data['img'] = data['img'][0].data
 
     # forward the model
     with torch.no_grad():
-        result = model(return_loss=False, rescale=True, **data)
-    return result, data
+        # result = model(return_loss=False, rescale=True, **data)
+        result = model(data['voxels'][0].squeeze(0),\
+                       data['num_points'][0].squeeze(0),\
+                       data['coors'][0].squeeze(0),\
+                       data['img'][0].squeeze(0),\
+                       torch.from_numpy(data['img_metas'][0][0]['lidar2img']).to(device.index))
+        # result = model(data['voxels'][0].squeeze(0), data['num_points'][0].squeeze(0), data['coors'][0].squeeze(0), data['img'][0].squeeze(0), torch.from_numpy(data['img_metas'][0][0]['lidar2img']).to(device.index))
+
+        bbox_list = pred2bbox.get_bboxes(*result, data['img_metas'][0], rescale=True)
+        bbox_results = [
+            bbox3d2result(bboxes, scores, labels)
+            for bboxes, scores, labels in bbox_list
+        ]
+
+        bbox_list_out = [dict() for i in range(len(data['img_metas'][0],))]
+        for result_dict, pts_bbox in zip(bbox_list_out, bbox_results):
+            result_dict['pts_bbox'] = pts_bbox
+
+    return bbox_list_out, data
 
 
 def inference_mono_3d_detector(model, image, ann_file):

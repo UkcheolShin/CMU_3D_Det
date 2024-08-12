@@ -8,8 +8,9 @@ from mmcv.image import tensor2imgs
 from mmdet3d.models import (Base3DDetector, Base3DSegmentor,
                             SingleStageMono3DDetector)
 
+from mmdet3d.core import bbox3d2result
 
-def single_gpu_test(model,
+def single_gpu_test(model, pred2bbox, 
                     data_loader,
                     show=False,
                     out_dir=None,
@@ -31,16 +32,37 @@ def single_gpu_test(model,
     Returns:
         list[dict]: The prediction results.
     """
+    model = model.to('cuda')
+    pred2bbox = pred2bbox.to('cuda')
     model.eval()
+    pred2bbox.eval()
+
     results = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
+
     for i, data in enumerate(data_loader):
         with torch.no_grad():
-            import pdb
-            pdb.set_trace()
-            result = model(return_loss=False, rescale=True, **data)
+            # result = model(return_loss=False, rescale=True, **data)
+            result = model(data['voxels'][0].data[0].squeeze(0),\
+                           data['num_points'][0].data[0].squeeze(0),\
+                           data['coors'][0].data[0].squeeze(0),\
+                           data['img'][0].data[0].squeeze(0),\
+                           torch.from_numpy(data['img_metas'][0].data[0][0]['lidar2img']))
+            # result = model(data['voxels'][0].data[0].squeeze(0), data['num_points'][0].data[0].squeeze(0),                           data['coors'][0].data[0].squeeze(0),                           data['img'][0].data[0].squeeze(0),torch.from_numpy(data['img_metas'][0].data[0][0]['lidar2img']))
+            # result2 = pred2bbox(data['voxels'][0].data[0].squeeze(0), data['num_points'][0].data[0].squeeze(0),                           data['coors'][0].data[0].squeeze(0),                           data['img'][0].data[0].squeeze(0),torch.from_numpy(data['img_metas'][0].data[0][0]['lidar2img']))
 
+            img_metas = data['img_metas'][0].data
+            bbox_list = pred2bbox.get_bboxes(*result, img_metas[0], rescale=True)
+            bbox_results = [
+                bbox3d2result(bboxes, scores, labels)
+                for bboxes, scores, labels in bbox_list
+            ]
+
+            bbox_list_out = [dict() for i in range(len(img_metas))]
+            for result_dict, pts_bbox in zip(bbox_list_out, bbox_results):
+                result_dict['pts_bbox'] = pts_bbox
+            result =  bbox_list_out
         if show:
             # Visualize the results of MMDetection3D model
             # 'show_results' is MMdetection3D visualization API
